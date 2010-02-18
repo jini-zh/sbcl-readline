@@ -86,32 +86,28 @@
 (defvar *prompt* #'default-prompt)
 (defvar *toplevel* t)
 
-(defun repl-read-form-fun (input output)
-  (let ((*standard-input*  input)
-        (*standard-output* output))
-    (loop with form
-          with line = (rl-readline (funcall *prompt*))
-          initially (unless line (terpri) (sb-ext:quit))
-          until (or form (string= line ""))
-          do (handler-case (setf form (read-from-string line))
-               (end-of-file ()
-                 (setf line (concatenate 'string
-                                         line
-                                         #.(make-string 1
+(defun readline (&key (ps1 "* ") (ps2 "> "))
+  (loop with result
+        with pos = 0
+        for line = (rl-readline ps1) then (rl-readline ps2)
+        for cmd = line then (concatenate 'string 
+                                         cmd 
+                                         #.(make-string 1 
                                              :initial-element #\newline)
-                                         (rl-readline "")))))
-          finally (if (string/= line "")
-                    (progn
-                      (add-history line)
-                      (incf *line-number*)
-                      (return form))
-                    (return (values))))))
-
-(defun readline (&key (prompt "> ")
-                      (input *standard-input*) 
-                      (output *standard-output*))
-  (let ((*prompt* (if (stringp prompt) (lambda () prompt) prompt)))
-    (repl-read-form-fun input output)))
+                                         line)
+        do (handler-case
+             (loop with form
+                   with eof = '#:eof
+                   do (multiple-value-setq (form pos) 
+                        (read-from-string cmd nil eof :start pos))
+                   until (eq form eof)
+                   do (push form result)
+                   finally 
+                     (progn
+                       (add-history cmd)
+                       (return-from readline 
+                                    (values-list (nreverse result)))))
+             (end-of-file ()))))
 
 (defun whitespacep (char)
   (member char '(#\Space #\Newline #\Linefeed #\Tab #\Return #\Page)))
@@ -352,7 +348,17 @@
 (-rl-enable-paren-matching 1)
 
 (setf sb-int:*repl-prompt-fun* (lambda (input) (fresh-line)))
-(setf sb-int:*repl-read-form-fun* #'repl-read-form-fun)
+(setf sb-int:*repl-read-form-fun*
+      (let (buffer)
+        (lambda (input output)
+          (if buffer
+            (pop buffer)
+            (let ((*standard-input* input)
+                  (*standard-output* output))
+              (let ((result (multiple-value-list 
+                              (readline :ps1 (funcall *prompt*)))))
+                (setf buffer (cdr result))
+                (car result)))))))
 
 (when (probe-file *history-file*)
   (read-history *history-file*))
