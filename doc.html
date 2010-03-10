@@ -1,0 +1,87 @@
+<head><title>sbcl-readline</title></head>
+
+<h1><code>sbcl-readline</code></h1>
+
+<p><h2>Exported symbols</h2></p>
+
+<h3><p><i>Variable:</i> <b>*HISTORY-FILE*</b></p></h3>
+
+<p>File to keep history in. Default value is <code>~/.sbcl-history</code>.</p>
+
+<h3><p><i>Variable:</i> <b>*HISTORY-SIZE*</b></p></h3>
+
+<p>Number of commands to keep in history. Default value is 200.</p>
+
+<h3><p><i>Variable:</i> <b>*PS1*</b></p></h3>
+
+<p>Either a string or a function that returns a string to be used when prompting
+user for the next command. The function have to take no arguments. Default
+is a function, returning strings <code>"shortest-package-name[command-number]: "</code>.</p>
+
+<h3><p><i>Variable:</i> <b>*PS2*</b></p></h3>
+
+<p>Either a string or a function that returns a string to be used when prompting
+user for the rest of incomplete command. The function have to take no
+arguments. Default value is <code>"&gt; "</code>.</p>
+
+<h3><p><i>Variable:</i> <b>*DEBUG-PS1*</b></p></h3>
+
+<p>Like <code>*ps1*</code>, but in debugger. Default value is a function simulating default
+SBCL debugger behaviour.</p>
+
+<h3><p><i>Variable:</i> <b>*DEBUG-PS2*</b></p></h3>
+
+<p>Like <code>*ps2*</code>, but in debugger. Default value is <code>"* "</code></p>
+
+<h3><p><i>Function:</i> <b>STIFLE-HISTORY</b></p></h3>
+
+<p><b>Syntax:</b></p>
+
+<p><b>stifle-history</b> <i>max</i> <i>=&gt; nil</i></p>
+
+<p><b>Arguments and values:</b></p>
+
+<p><i>max</i>---a number</p>
+
+<p><b>Description:</b></p>
+
+<p>Stifle the history list, remembering only the last <i>max</i> entries</p>
+
+<h3><p><i>Function:</i> <b>UNSTIFLE-HISTORY</b></p></h3>
+
+<p><b>Syntax:</b></p>
+
+<p><b>unstifle-history</b> <i>=&gt; max</i></p>
+
+<p><b>Arguments and values:</b></p>
+
+<p><i>max</i>---the maximum number of history entries as set by
+<i>stifle-history</i>. It is positive if the history was stifled, negative if it
+wasn't.</p>
+
+<p><b>Description:</b></p>
+
+<p>Stop stifling the history.</p>
+
+<h3><p><i>Function:</i> <b>READLINE</b></p></h3>
+
+<p><b>Syntax:</b></p>
+
+<p><b>readline</b> <i><tt>&amp;key</tt> ps1 ps2 eof-value =&gt; form1, form2,
+...</i></p>
+
+<p><b>Arguments and values:</b></p>
+
+<p><i>ps1</i>---either a string or a function that returns a string to be used
+when prompting user for the command. Default is <code>"* "</code>.
+<p><i>ps2</i>---either a string or a function that returns a string to be used 
+when prompting user for the rest of incomplete command. Default is <code>"> "</code>.
+<p><i>eof-value</i>---a value to return in case of the end of
+<code>*standard-input*</code> stream. By default an <code>end-of-file</code> condition is raised.
+
+<p><b>Description:</b></p>
+
+<p>Prompts user for a command and returns the result as a Lisp form. Provides
+all readline facilities such as autocompletion and history. The result is saved
+in readline history. Note that user can enter several forms in one line;
+this results in multiple returning values.</p>

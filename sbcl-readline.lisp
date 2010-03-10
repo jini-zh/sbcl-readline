@@ -1,21 +1,33 @@
 ;;; SBCL interface to GNU Readline
-;;; author: Evgeniy Zhemchugov <jini.zh@gmail.com>
+;;; (c) 2009 2010 by Evgeniy Zhemchugov <jini.zh@gmail.com>
 ;;;
-;;; (c) 2009
+;;; This program is free software: you can redistribute it and/or modify
+;;; it under the terms of the GNU General Public License as published by
+;;; the Free Software Foundation, either version 3 of the License, or
+;;; (at your option) any later version.
+;;;
+;;; This program is distributed in the hope that it will be useful,
+;;; but WITHOUT ANY WARRANTY; without even the implied warranty of
+;;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+;;; GNU General Public License for more details.
+;;;
+;;; You should have received a copy of the GNU General Public License
+;;; along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
 
 (defpackage readline
-  (:use :cl :cl-user :sb-alien)
+  (:use :cl :cl-user)
   (:export *history-file* 
            *history-size*
-           *line-number*
-           *prompt*
+           *ps1*
+           *ps2*
+           *debug-ps1*
+           *debug-ps2*
            stifle-history
            unstifle-history
            readline))
 
 (in-package readline)
-
-(declaim (optimize (safety 3) (debug 3)))
 
 (require 'asdf)
 (require 'cffi)
@@ -48,7 +60,9 @@
 (cffi:defcfun "add_history"      :void   (command :string))
 (cffi:defcfun "read_history"     :int    (file    :string))
 (cffi:defcfun "write_history"    :int    (file    :string))
-(cffi:defcfun "stifle_history"   :void   (max     :int))
+(cffi:defcfun "stifle_history"   :void   
+  "Stifle the history list, remembering only the last MAX entries"
+  (max :int))
 (cffi:defcfun "unstifle_history" :int)
 (cffi:defcfun "_rl_enable_paren_matching" :int (on-or-off :int))
 (cffi:defcfun "rl_display_match_list" :void 
@@ -70,44 +84,88 @@
 (cffi:defcvar "rl_completion_suppress_append" :int)
 (cffi:defcvar "rl_completion_query_items" :int)
 
-(defun default-prompt ()
-  (format nil "~a[~a]: "
-          (car (sort (append
-                       (package-nicknames *package*)
-                       (list (package-name *package*)))
-                     #'<
-                     :key #'length))
-          *line-number*))
+(let ((line-number 0))
+  (defun default-prompt ()
+    (format nil "~a[~a]: "
+            (car (sort (append
+                         (package-nicknames *package*)
+                         (list (package-name *package*)))
+                       #'<
+                       :key #'length))
+            (incf line-number))))
 
-(defvar *line-number* 1)
 (defvar *history-file* 
-  (format nil "~a/.sbcl-history" (sb-ext:posix-getenv "HOME")))
-(defvar *history-size* 200)
-(defvar *prompt* #'default-prompt)
-(defvar *toplevel* t)
+  (format nil "~a/.sbcl-history" (sb-ext:posix-getenv "HOME"))
+  "File to keep history in")
+(defvar *history-size* 200
+  "Number of commands to keep in history")
 
-(defun readline (&key (ps1 "* ") (ps2 "> "))
+(defvar *ps1* #'default-prompt
+  "Either a string or a function that returns a string to be used when prompting user for the next command. The function have to take no arguments")
+
+(defvar *ps2* "> "
+  "Either a string or a function that returns a string to be used when prompting user for the rest of incomplete command. The function have to take no arguments")
+
+(defvar *debug-ps1*
+  ; #'sb-debug::debug-prompt will be overwritten later
+  (let ((p #'sb-debug::debug-prompt))
+    (lambda ()
+      ; strip the newline in the beginning
+      (subseq (with-output-to-string (s) (funcall p s)) 1)))
+  "Either a string or a function that returns a string to be used when prompting user for the next command in debug mode. The function have to take no arguments")
+
+(defvar *debug-ps2* "* "
+  "Either a string or a function that returns a string to be used when prompting user for the rest of inomplete command in debug mode. The function have to take no arguments")
+
+(defun prompt (ps)
+  (etypecase ps
+    (string ps)
+    (function (funcall ps))))
+
+(defun readline (&key (ps1 "* ") (ps2 "> ") (eof-value nil eof-error-p))
+  "Prompts user for a command and returns the result as a Lisp form"
   (loop with result
         with pos = 0
-        for line = (rl-readline ps1) then (rl-readline ps2)
+        for line = (rl-readline (prompt ps1)) then (rl-readline (prompt ps2))
         for cmd = line then (concatenate 'string 
                                          cmd 
                                          #.(make-string 1 
                                              :initial-element #\newline)
-                                         line)
-        do (handler-case
-             (loop with form
-                   with eof = '#:eof
-                   do (multiple-value-setq (form pos) 
-                        (read-from-string cmd nil eof :start pos))
-                   until (eq form eof)
-                   do (push form result)
-                   finally 
-                     (progn
-                       (add-history cmd)
+                                         (or line ""))
+        unless line do
+          (if eof-error-p
+            (return eof-value)
+            (error 'end-of-file :stream *standard-input*))
+        do (unwind-protect
+             (handler-case
+               (loop with form
+                     with eof = '#:eof
+                     do (multiple-value-setq (form pos) 
+                          (read-from-string cmd nil eof :start pos))
+                     until (eq form eof)
+                     do (push form result)
+                     finally 
                        (return-from readline 
-                                    (values-list (nreverse result)))))
-             (end-of-file ()))))
+                                    (values-list (nreverse result))))
+               (end-of-file ()))
+             (unless (= (length cmd) 0)
+               (add-history cmd)))))
+
+(defun parse-symbol (string &key (start 0) (end (length string)))
+  (let* ((colon (position #\: string :start start :end end))
+         (internal (and colon
+                        (< (1+ colon) end)
+                        (char= (char string (1+ colon)) #\:))))
+    (values (cond
+              ((not colon) start)
+              (internal (+ colon 2))
+              (t (1+ colon)))
+            internal
+            (cond
+              ((not colon) *package*)
+              ((= colon start) 'keyword)
+              (t (find-package
+                   (read-from-string string t nil :start start :end colon)))))))
 
 (defun whitespacep (char)
   (member char '(#\Space #\Newline #\Linefeed #\Tab #\Return #\Page)))
@@ -117,7 +175,7 @@
         with key = nil
         with rest = nil
         with allow-other-keys = nil
-        for arg in (sb-kernel:%simple-fun-arglist f)
+        for arg in (sb-kernel:%fun-lambda-list f)
         if (eq arg '&key)
          do (setf key t)
         else if (eq arg '&optional)
@@ -129,12 +187,16 @@
         else if optional
          count t into opt-num
         else if key
-         collect (intern (symbol-name (if (atom arg) arg (car arg))) 'keyword) 
+         collect (intern (symbol-name
+                           (cond ((atom arg) arg)
+                                 ((atom (car arg)) (car arg))
+                                 (t (caar arg))))
+                         'keyword)
                  into keys
         else
          count t into req-num
         finally 
-         (return (values (sb-kernel:%simple-fun-name f)
+         (return (values ;(sb-kernel:%simple-fun-name f)
                          req-num opt-num rest keys allow-other-keys))))
 
 (defun find-symbols (key package &optional external-only)
@@ -148,9 +210,12 @@
           (push s result))))))
 
 (defun find-function-keywords (function key arg)
-  (multiple-value-bind (name req-num opt-num rest keys allow-other-keys)
+  (multiple-value-bind (#|name|# req-num opt-num rest keys allow-other-keys)
                        (function-signature function)
-    (if (or allow-other-keys (< arg (+ req-num opt-num)))
+    (declare (ignorable rest))
+    (if (or allow-other-keys 
+            (< arg (+ req-num opt-num))
+            (oddp (- arg req-num opt-num)))
       (find-symbols key 'keyword)
       (delete-if-not key keys))))
 
@@ -173,10 +238,15 @@
                                  (copy-seq (package-nicknames p))))
                          (list-all-packages))))
 
-(defun find-function (name)
-  (let ((f (find-symbol (string-upcase name))))
-    (when (fboundp f)
-      (or (macro-function f) (symbol-function f)))))
+(defun find-function (string &key (start 0) (end (length string)))
+  (multiple-value-bind (symbol-start internal package)
+                       (parse-symbol string :start start :end end)
+    (let ((f (find-symbol 
+               (nstring-upcase (subseq string symbol-start end))
+               package)))
+      (when (fboundp f)
+        (or (macro-function f)
+            (symbol-function f))))))
 
 (defun find-parent-function (string start)
   (loop with level = 0
@@ -194,12 +264,12 @@
              (progn
                (setf space nil)
                (cond 
-                 ((char= c #\() (if (= level 0)
-                                  (return 
-                                    (values
-                                      (find-function (subseq string (1+ i) end))
-                                      arg))
-                                  (decf level)))
+                 ((char= c #\()
+                  (if (= level 0)
+                    (return 
+                      (values (find-function string :start (1+ i) :end end)
+                              arg))
+                    (decf level)))
                  ((char= c #\)) (incf level)))))))
 
 (defun quoted (string end)
@@ -231,61 +301,51 @@
         (setf *rl-attempted-completion-over* 1))
       (return-from complete nil)))
   (setf *rl-attempted-completion-over* 1)
-  (let* ((colon (position #\: string :start start :end end))
-         (double-colon (and colon 
-                            (< (1+ colon) end) 
-                            (char= (char string (1+ colon)) #\:)))
-         (package (cond
-                    ((not colon) *package*)
-                    ((= colon start) 'keyword)
-                    (t (find-package
-                         (read-from-string string t nil 
-                                           :start start 
-                                           :end colon)))))
-         (symbol-start (if colon
-                         (if double-colon (+ colon 2) (1+ colon))
-                         start))
-         (functional (or (and (> start 0)
-                              (char= (char string (1- start)) #\())
-                         (and (> start 1)
-                              (string= (subseq string (- start 2) start) "#'"))))
-         arg)
-    (unless functional
-      (multiple-value-setq (functional arg) 
-        (find-parent-function string start)))
-    (labels ((name-cmp (name)
-                       (string-equal string name
-                                     :start1 symbol-start :end1 end
-                                     :end2 (min (length name) 
-                                                (- end symbol-start))))
-             (symbol-name-cmp (symbol) (name-cmp (symbol-name symbol))))
-      (unless package ; bad package name
-        (return-from complete nil))
-      (sort
-        (if (eq package 'keyword)
-          (mapcar! (lambda (symbol) (symbol-name* symbol ":"))
-                   (if (functionp functional)
-                     (find-function-keywords 
-                       functional #'symbol-name-cmp arg)
-                     (find-symbols #'symbol-name-cmp 'keyword)))
-          (nconc
-            (mapcar! (if (eq package *package*)
-                       #'symbol-name*
-                       (let ((package-part (subseq string start symbol-start)))
-                         (lambda (symbol)
-                           (symbol-name* symbol package-part))))
-                     (let ((external-only (not (or double-colon 
-                                                   (eq package *package*)))))
-                       (if (eq functional t)
-                         (find-functions 
-                           #'symbol-name-cmp package external-only)
-                         (find-symbols ; find-values?
-                           #'symbol-name-cmp package external-only))))
-            (when (eq package *package*)
-              (mapcar! (lambda (name)
-                         (nstring-downcase (concatenate 'string name ":")))
-                       (find-packages #'name-cmp)))))
-        #'string-lessp))))
+  (multiple-value-bind (symbol-start internal package)
+                       (parse-symbol string :start start :end end)
+    (let ((functional (or (and (> start 0)
+                               (char= (char string (1- start)) #\())
+                          (and (> start 1)
+                               (string= (subseq string (- start 2) start) 
+                                        "#'"))))
+          arg)
+      (unless functional
+        (multiple-value-setq (functional arg) 
+          (find-parent-function string start)))
+      (labels ((name-cmp (name)
+                         (string-equal string name
+                                       :start1 symbol-start :end1 end
+                                       :end2 (min (length name) 
+                                                  (- end symbol-start))))
+               (symbol-name-cmp (symbol) (name-cmp (symbol-name symbol))))
+        (unless package ; bad package name
+          (return-from complete nil))
+        (sort
+          (if (eq package 'keyword)
+            (mapcar! (lambda (symbol) (symbol-name* symbol ":"))
+                     (if (functionp functional)
+                       (find-function-keywords 
+                         functional #'symbol-name-cmp arg)
+                       (find-symbols #'symbol-name-cmp 'keyword)))
+            (nconc
+              (mapcar! (if (eq package *package*)
+                         #'symbol-name*
+                         (let ((package-part 
+                                 (subseq string start symbol-start)))
+                           (lambda (symbol)
+                             (symbol-name* symbol package-part))))
+                       (let ((external-only (not (or internal
+                                                     (eq package *package*)))))
+                         (if (eq functional t)
+                           (find-functions 
+                             #'symbol-name-cmp package external-only)
+                           (find-symbols ; find-values?
+                             #'symbol-name-cmp package external-only))))
+              (when (eq package *package*)
+                (mapcar! (lambda (name)
+                           (nstring-downcase (concatenate 'string name ":")))
+                         (find-packages #'name-cmp)))))
+          #'string-lessp)))))
 
 (defun string-start-intersection (&rest strings)
   (if (atom strings)
@@ -329,7 +389,7 @@
         (rl-forced-update-display))
       ((or (< *rl-completion-query-items* 0)
            (> *rl-completion-query-items* num-matches)
-           (if (y-or-n-p "Display all ~d possibilities?" num-matches)
+           (if (y-or-n-p "~%Display all ~d possibilities?" num-matches)
              t
              (progn
                (terpri)
@@ -347,22 +407,49 @@
 
 (-rl-enable-paren-matching 1)
 
-(setf sb-int:*repl-prompt-fun* (lambda (input) (fresh-line)))
-(setf sb-int:*repl-read-form-fun*
-      (let (buffer)
-        (lambda (input output)
-          (if buffer
-            (pop buffer)
-            (let ((*standard-input* input)
-                  (*standard-output* output))
-              (let ((result (multiple-value-list 
-                              (readline :ps1 (funcall *prompt*)))))
-                (setf buffer (cdr result))
-                (car result)))))))
-
 (when (probe-file *history-file*)
   (read-history *history-file*))
 (push (lambda () 
         (stifle-history *history-size*)
         (write-history *history-file*)) 
       sb-ext:*exit-hooks*)
+
+(handler-bind ((sb-ext:symbol-package-locked-error
+                 (lambda (c) 
+                   (declare (ignorable c)) 
+                   (invoke-restart 'continue))))
+  (macrolet ((describe-readline-reader (buffer input output ps1 ps2 on-eof)
+               `(if ,buffer
+                  (pop ,buffer)
+                  (let ((*standard-input*  ,input)
+                        (*standard-output* ,output)
+                        (eof '#:eof))
+                    (loop
+                      (let ((result (multiple-value-list
+                                      (readline :ps1 ,ps1
+                                                :ps2 ,ps2
+                                                :eof-value eof))))
+                        (cond ((eq (car result) eof) 
+                               (terpri)
+                               ,on-eof)
+                              (result
+                                (setf ,buffer (cdr result))
+                                (return (car result))))))))))
+    (setf sb-int:*repl-prompt-fun* 
+          (lambda (input) 
+            (declare (ignorable input))
+            (fresh-line))
+          sb-int:*repl-read-form-fun*
+          (let (buffer)
+            (lambda (input output)
+              (describe-readline-reader 
+                buffer input output *ps1* *ps2* (sb-ext:quit))))
+          (symbol-function 'sb-debug::debug-prompt)
+          (lambda (stream)
+            (sb-thread::get-foreground)
+            (fresh-line stream))
+          (symbol-function 'sb-debug::debug-read)
+          (let (buffer)
+            (lambda (stream)
+              (describe-readline-reader
+                buffer stream stream *debug-ps1* *debug-ps2* (abort)))))))

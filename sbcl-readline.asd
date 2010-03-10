@@ -4,7 +4,7 @@
 (defsystem :sbcl-readline
   :name "sbcl-readline"
   :description "GNU Readline support for SBCL"
-  :version "0.1"
+  :version "1.0"
   :author "Evgeniy Zhemchugov"
   :depends-on (cffi)
   :components ((:file "sbcl-readline")))
