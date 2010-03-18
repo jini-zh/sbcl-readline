@@ -136,20 +136,20 @@
           (if eof-error-p
             (return eof-value)
             (error 'end-of-file :stream *standard-input*))
-        do (unwind-protect
-             (handler-case
-               (loop with form
-                     with eof = '#:eof
-                     do (multiple-value-setq (form pos) 
-                          (read-from-string cmd nil eof :start pos))
-                     until (eq form eof)
-                     do (push form result)
-                     finally 
+        do (handler-case
+             (loop with form
+                   with eof = '#:eof
+                   do (multiple-value-setq (form pos)
+                        (read-from-string cmd nil eof :start pos))
+                   until (eq form eof)
+                   do (push form result)
+                   finally
+                     (progn
+                       (unless (= (length cmd) 0)
+                         (add-history cmd))
                        (return-from readline 
-                                    (values-list (nreverse result))))
-               (end-of-file ()))
-             (unless (= (length cmd) 0)
-               (add-history cmd)))))
+                                    (values-list (nreverse result)))))
+             (end-of-file ()))))
 
 (defun parse-symbol (string &key (start 0) (end (length string)))
   (let* ((colon (position #\: string :start start :end end))
