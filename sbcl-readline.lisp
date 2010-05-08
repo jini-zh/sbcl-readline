@@ -257,7 +257,7 @@
         for c = (char string i)
         do (if (whitespacep c)
              (progn
-               (when (not space)
+               (when (and (= level 0) (not space))
                  (incf arg)
                  (setf space t))
                (setf end i))
