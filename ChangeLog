@@ -1,3 +1,8 @@
 sbcl-readline 1.0.1:
 
 	Keep multiline command as a single entry in the history.
+
+sbcl-readline 1.0.2:
+
+	Provide proper autocompletion for keyword arguments in case of a function with both &rest and &key arguments.
+	Handle SBCL's &more keyword properly.
