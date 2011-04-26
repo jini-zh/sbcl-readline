@@ -198,6 +198,11 @@
          do (setf rest t)
         else if (eq arg '&allow-other-keys)
          do (setf allow-other-keys t)
+        else if (eq arg 'sb-int:&more)
+         do (progn
+              (setf allow-other-keys t
+                    rest t)
+              (loop-finish))
         else if optional
          count t into opt-num
         else if key
@@ -207,7 +212,7 @@
                                  (t (caar arg))))
                          'keyword)
                  into keys
-        else
+        else unless rest
          count t into req-num
         finally 
          (return (values ;(sb-kernel:%simple-fun-name f)
