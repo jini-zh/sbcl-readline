@@ -1,5 +1,5 @@
 ;;; SBCL interface to GNU Readline
-;;; (c) 2009 2010 by Evgeniy Zhemchugov <jini.zh@gmail.com>
+;;; (c) 2009--2011 by Evgeniy Zhemchugov <jini.zh@gmail.com>
 ;;;
 ;;; This program is free software: you can redistribute it and/or modify
 ;;; it under the terms of the GNU General Public License as published by
@@ -25,7 +25,10 @@
            *debug-ps2*
            stifle-history
            unstifle-history
-           readline))
+           readline
+           set-keyboard-input-timeout
+           get-event-hook
+           set-event-hook))
 
 (in-package readline)
 
@@ -50,8 +53,12 @@
 (define-alien-variable "rl_attempted_completion_over" int)
 |#
 
-(cffi:define-foreign-library ncurses (t (:default "libncursesw" "libncurses")))
-(cffi:define-foreign-library readline (t (:or "libreadline.so.6" "libreadline")))
+(cffi:define-foreign-library ncurses 
+                             (:windows "pdcurses.dll")
+                             (t (:default "libncursesw" "libncurses")))
+(cffi:define-foreign-library readline 
+                             (:windows (:or "readline.dll" "readline5.dll"))
+                             (t (:or "libreadline.so.6" "libreadline")))
 
 (cffi:use-foreign-library ncurses)
 (cffi:use-foreign-library readline)
@@ -69,9 +76,14 @@
               (matches :pointer) (len :int) (max :int))
 (cffi:defcfun "rl_redisplay" :void)
 (cffi:defcfun "rl_forced_update_display" :int)
+(cffi:defcfun ("rl_set_keyboard_input_timeout" set-keyboard-input-timeout) 
+              :int 
+              "While waiting for keyboard input, Readline will wait for u microseconds before calling any function assigned with set-event-hook. u must be greater than or equal to zero (a zero-length timeout is equivalent to poll). The default waiting period is one-tenth of a second. Returns the old timeout value."
+              (u :int))
 
 (cffi:defcvar "rl_attempted_completion_function" :pointer)
 (cffi:defcvar "rl_completion_display_matches_hook" :pointer)
+(cffi:defcvar "rl_event_hook" :pointer)
 
 (cffi:defcvar "rl_line_buffer" :string)
 (cffi:defcvar "rl_point" :int)
@@ -101,10 +113,10 @@
   "Number of commands to keep in history")
 
 (defvar *ps1* #'default-prompt
-  "Either a string or a function that returns a string to be used when prompting user for the next command. The function have to take no arguments")
+  "Either a string or a function that returns a string to be used when prompting user for the next command. The function has to take no arguments")
 
 (defvar *ps2* "> "
-  "Either a string or a function that returns a string to be used when prompting user for the rest of incomplete command. The function have to take no arguments")
+  "Either a string or a function that returns a string to be used when prompting user for the rest of incomplete command. The function has to take no arguments")
 
 (defvar *debug-ps1*
   ; #'sb-debug::debug-prompt will be overwritten later
@@ -112,10 +124,12 @@
     (lambda ()
       ; strip the newline in the beginning
       (subseq (with-output-to-string (s) (funcall p s)) 1)))
-  "Either a string or a function that returns a string to be used when prompting user for the next command in debug mode. The function have to take no arguments")
+  "Either a string or a function that returns a string to be used when prompting user for the next command in debug mode. The function has to take no arguments")
 
 (defvar *debug-ps2* "* "
-  "Either a string or a function that returns a string to be used when prompting user for the rest of inomplete command in debug mode. The function have to take no arguments")
+  "Either a string or a function that returns a string to be used when prompting user for the rest of inomplete command in debug mode. The function has to take no arguments")
+
+(defvar *event-hook* nil)
 
 (defun prompt (ps)
   (etypecase ps
@@ -453,3 +467,23 @@
             (lambda (stream)
               (describe-readline-reader
                 buffer stream stream *debug-ps1* *debug-ps2* (abort)))))))
+
+(cffi:defcallback event-hook :int ()
+  (handler-case 
+    (funcall *event-hook*)
+    (condition (c)
+      (princ c)
+      (set-event-hook nil)))
+  0)
+
+(defun get-event-hook ()
+  "Get the function periodically called by Readline while waiting for terminal input"
+  *event-hook*)
+
+(defun set-event-hook (function)
+  "Call the function periodically when Readline is waiting for terminal input. By default, this will be called at most ten times a second if there is no keyboard input. NIL removes the hook."
+  (setf *event-hook* function
+        *rl-event-hook* (if function 
+                          (cffi:callback event-hook) 
+                          (cffi:null-pointer)))
+  nil)
