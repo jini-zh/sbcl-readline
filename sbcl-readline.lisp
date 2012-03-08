@@ -28,7 +28,8 @@
            readline
            set-keyboard-input-timeout
            get-event-hook
-           set-event-hook))
+           set-event-hook
+           printf))
 
 (in-package readline)
 
@@ -55,7 +56,8 @@
 
 (cffi:define-foreign-library ncurses 
                              (:windows "pdcurses.dll")
-                             (t (:default "libncursesw" "libncurses")))
+                             (t (:or "libncursesw.so.5" "libncursesw")))
+;                             (t (:default "libncursesw" "libncurses")))
 (cffi:define-foreign-library readline 
                              (:windows (:or "readline.dll" "readline5.dll"))
                              (t (:or "libreadline.so.6" "libreadline")))
@@ -81,20 +83,50 @@
               "While waiting for keyboard input, Readline will wait for u microseconds before calling any function assigned with set-event-hook. u must be greater than or equal to zero (a zero-length timeout is equivalent to poll). The default waiting period is one-tenth of a second. Returns the old timeout value."
               (u :int))
 
-(cffi:defcvar "rl_attempted_completion_function" :pointer)
-(cffi:defcvar "rl_completion_display_matches_hook" :pointer)
-(cffi:defcvar "rl_event_hook" :pointer)
+(cffi:defcfun "strlen" :unsigned-long (s :pointer))
 
-(cffi:defcvar "rl_line_buffer" :string)
-(cffi:defcvar "rl_point" :int)
-(cffi:defcvar "rl_attempted_completion" :int)
-(cffi:defcvar "rl_completion_quote_character" :int)
-(cffi:defcvar "rl_completion_suppress_quote" :int)
-(cffi:defcvar "rl_basic_word_break_characters" :string)
-(cffi:defcvar "rl_basic_quote_characters" :string)
-(cffi:defcvar "rl_attempted_completion_over" :int)
-(cffi:defcvar "rl_completion_suppress_append" :int)
-(cffi:defcvar "rl_completion_query_items" :int)
+(cffi:defcvar "rl_attempted_completion_function"   :pointer)
+(cffi:defcvar "rl_attempted_completion"            :int)
+(cffi:defcvar "rl_attempted_completion_over"       :int)
+(cffi:defcvar "rl_basic_quote_characters"          :string)
+(cffi:defcvar "rl_basic_word_break_characters"     :string)
+(cffi:defcvar "rl_completion_display_matches_hook" :pointer)
+(cffi:defcvar "rl_completion_query_items"          :int)
+(cffi:defcvar "rl_completion_quote_character"      :int)
+(cffi:defcvar "rl_completion_suppress_append"      :int)
+(cffi:defcvar "rl_completion_suppress_quote"       :int)
+(cffi:defcvar "rl_event_hook"                      :pointer)
+(cffi:defcvar "rl_line_buffer"                     :string)
+(cffi:defcvar "rl_point"                           :int)
+(cffi:defcvar "rl_prompt"                          :pointer)
+(cffi:defcvar "rl_readline_state"                  :int)
+
+; taken from /usr/include/readline/readline.h
+(cffi:defcenum state
+  (:initializing #x0000001)  ; initializing
+  (:initialized  #x0000002)  ; initialization done
+  (:termprepped  #x0000004)  ; terminal is prepped
+  (:readcmd      #x0000008)  ; reading a command key
+  (:metanext     #x0000010)  ; reading input after ESC
+  (:dispatching  #x0000020)  ; dispatching to a command
+  (:moreinput    #x0000040)  ; reading more input in a command function
+  (:isearch      #x0000080)  ; doing incremental search
+  (:nsearch      #x0000100)  ; doing non-inc search
+  (:search       #x0000200)  ; doing a history search
+  (:numericarg   #x0000400)  ; reading numeric argument
+  (:macroinput   #x0000800)  ; getting input from a macro
+  (:macrodef     #x0001000)  ; defining keyboard macro
+  (:overwrite    #x0002000)  ; overwrite mode
+  (:completing   #x0004000)  ; doing completion
+  (:sighandler   #x0008000)  ; in readline sighandler
+  (:undoing      #x0010000)  ; doing an undo
+  (:inputpending #x0020000)  ; rl_execute_next called
+  (:ttycsaved    #x0040000)  ; tty special chars saved
+  (:callback     #x0080000)  ; using the callback interface
+  (:vimotion     #x0100000)  ; reading vi motion arg
+  (:multikey     #x0200000)  ; reading multiple-key command
+  (:vicmdonce    #x0400000)  ; entered vi command mode at least once
+  (:redisplaying #x0800000)) ; updating terminal display
 
 (let ((line-number 0))
   (defun default-prompt ()
@@ -487,3 +519,19 @@
                           (cffi:callback event-hook) 
                           (cffi:null-pointer)))
   nil)
+
+(defun in-state (state)
+  (not (zerop (logand *rl-readline-state*
+                      (cffi:foreign-enum-value 'state state)))))
+
+(defun printf (format &rest data)
+  (if (in-state :readcmd)
+    (progn
+      (write-char #\return)
+      (dotimes (i (+ (strlen *rl-prompt*) *rl-point*))
+        (write-char #\space))
+      (write-char #\return)
+      (apply #'format t format data)
+      (write-char #\newline)
+      (rl-forced-update-display))
+    (apply #'format t format data)))
