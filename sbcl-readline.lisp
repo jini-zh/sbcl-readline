@@ -284,17 +284,20 @@
                                  (copy-seq (package-nicknames p))))
                          (list-all-packages))))
 
-(defun find-function (string &key (start 0) (end (length string)))
+(defun find-function (string &key (start 0) (end (length string)) as-symbol)
   (multiple-value-bind (symbol-start internal package)
                        (parse-symbol string :start start :end end)
+    (declare (ignore internal))
     (let ((f (find-symbol 
                (nstring-upcase (subseq string symbol-start end))
                package)))
       (when (fboundp f)
-        (or (macro-function f)
-            (symbol-function f))))))
+        (if as-symbol
+          f
+          (or (macro-function f)
+              (symbol-function f)))))))
 
-(defun find-parent-function (string start)
+(defun find-parent-function (string start &key as-symbol)
   (loop with level = 0
         with end = start
         with arg = -1
@@ -313,7 +316,10 @@
                  ((char= c #\()
                   (if (= level 0)
                     (return 
-                      (values (find-function string :start (1+ i) :end end)
+                      (values (find-function string
+                                             :start (1+ i)
+                                             :end end
+                                             :as-symbol as-symbol)
                               arg))
                     (decf level)))
                  ((char= c #\)) (incf level)))))))
@@ -427,7 +433,8 @@
                   ((matches :pointer) (num-matches :int) (max-length :int))
   (let ((f (and (> *rl-point* 0)
                 (whitespacep (char *rl-line-buffer* (1- *rl-point*)))
-                (find-parent-function *rl-line-buffer* *rl-point*))))
+                (find-parent-function *rl-line-buffer* *rl-point*
+                                      :as-symbol t))))
     (cond
       (f
         (terpri)
