@@ -507,6 +507,14 @@
               (describe-readline-reader
                 buffer stream stream *debug-ps1* *debug-ps2* (abort)))))))
 
+(defun set-event-hook (function)
+  "Call the function periodically when Readline is waiting for terminal input. By default, this will be called at most ten times a second if there is no keyboard input. NIL removes the hook."
+  (setf *event-hook* function
+        *rl-event-hook* (if function
+                          (cffi:callback event-hook)
+                          (cffi:null-pointer)))
+  nil)
+
 (cffi:defcallback event-hook :int ()
   (handler-case 
     (funcall *event-hook*)
@@ -518,14 +526,6 @@
 (defun get-event-hook ()
   "Get the function periodically called by Readline while waiting for terminal input"
   *event-hook*)
-
-(defun set-event-hook (function)
-  "Call the function periodically when Readline is waiting for terminal input. By default, this will be called at most ten times a second if there is no keyboard input. NIL removes the hook."
-  (setf *event-hook* function
-        *rl-event-hook* (if function 
-                          (cffi:callback event-hook) 
-                          (cffi:null-pointer)))
-  nil)
 
 (defun in-state (state)
   (not (zerop (logand *rl-readline-state*
