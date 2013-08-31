@@ -263,7 +263,7 @@
   (multiple-value-bind (#|name|# req-num opt-num rest keys allow-other-keys)
                        (function-signature function)
     (declare (ignorable rest))
-    (if (or allow-other-keys 
+    (if (or allow-other-keys (and rest (not keys))
             (< arg (+ req-num opt-num))
             (oddp (- arg req-num opt-num)))
       (find-symbols key 'keyword)
