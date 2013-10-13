@@ -507,9 +507,10 @@
             (fresh-line stream))
           (symbol-function 'sb-debug::debug-read)
           (let (buffer)
-            (lambda (stream)
+            (lambda (stream eof-restart)
               (describe-readline-reader
-                buffer stream stream *debug-ps1* *debug-ps2* (abort)))))))
+                buffer stream stream *debug-ps1* *debug-ps2*
+                (invoke-restart eof-restart)))))))
 
 (defun set-event-hook (function)
   "Call the function periodically when Readline is waiting for terminal input. By default, this will be called at most ten times a second if there is no keyboard input. NIL removes the hook."
