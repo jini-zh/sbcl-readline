@@ -404,7 +404,7 @@
     (setf *rl-completion-suppress-quote* 1))
   (let ((q (quoted string start)))
     (when q
-      (unless (and (> q 1) (string= string "#p" :start1 (- q 2) :end1 q))
+      (unless (and (> q 1) (string-equal string "#p" :start1 (- q 2) :end1 q))
         (setf *rl-attempted-completion-over* 1))
       (return-from rl-complete nil)))
   (setf *rl-attempted-completion-over* 1)
