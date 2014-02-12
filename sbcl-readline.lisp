@@ -365,10 +365,12 @@
         (multiple-value-setq (functional arg) 
           (find-parent-function string start)))
       (labels ((name-cmp (name)
-                         (string-equal string name
-                                       :start1 symbol-start :end1 end
-                                       :end2 (min (length name) 
-                                                  (- end symbol-start))))
+                 (let ((len (- end symbol-start)))
+                   (and (>= (length name) len)
+                        (string-equal string name
+                                      :start1 symbol-start
+                                      :end1   end
+                                      :end2   len))))
                (symbol-name-cmp (symbol) (name-cmp (symbol-name symbol))))
         (unless package ; bad package name
           (return-from complete-symbol nil))
