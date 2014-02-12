@@ -25,6 +25,7 @@
            *debug-ps2*
            stifle-history
            unstifle-history
+           readline-lisp
            readline
            set-keyboard-input-timeout
            get-event-hook
@@ -64,7 +65,7 @@
 (cffi:use-foreign-library ncurses)
 (cffi:use-foreign-library readline)
 
-(cffi:defcfun ("readline" rl-readline) :string (prompt :string))
+(cffi:defcfun readline :string (prompt :string))
 (cffi:defcfun "add_history"      :void   (command :string))
 (cffi:defcfun "read_history"     :int    (file    :string))
 (cffi:defcfun "write_history"    :int    (file    :string))
@@ -167,11 +168,11 @@
     (string ps)
     (function (funcall ps))))
 
-(defun readline (&key (ps1 "* ") (ps2 "> ") (eof-value nil eof-error-p))
+(defun readline-lisp (&key (ps1 "* ") (ps2 "> ") (eof-value nil eof-error-p))
   "Prompts user for a command and returns the result as a Lisp form"
   (loop with result
         with pos = 0
-        for line = (rl-readline (prompt ps1)) then (rl-readline (prompt ps2))
+        for line = (readline (prompt ps1)) then (readline (prompt ps2))
         for cmd = line then (concatenate 'string 
                                          cmd 
                                          #.(make-string 1 
@@ -192,7 +193,7 @@
                      (progn
                        (unless (= (length cmd) 0)
                          (add-history cmd))
-                       (return-from readline 
+                       (return-from readline-lisp
                                     (values-list (nreverse result)))))
              (end-of-file ()))))
 
@@ -483,9 +484,9 @@
                         (eof '#:eof))
                     (loop
                       (let ((result (multiple-value-list
-                                      (readline :ps1 ,ps1
-                                                :ps2 ,ps2
-                                                :eof-value eof))))
+                                      (readline-lisp :ps1 ,ps1
+                                                     :ps2 ,ps2
+                                                     :eof-value eof))))
                         (cond ((eq (car result) eof) 
                                (terpri)
                                ,on-eof)
