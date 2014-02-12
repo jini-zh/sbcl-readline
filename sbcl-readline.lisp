@@ -17,7 +17,8 @@
 
 (defpackage readline
   (:use :cl :cl-user)
-  (:export *history-file* 
+  (:export *complete*
+           *history-file*
            *history-size*
            *ps1*
            *ps2*
@@ -351,13 +352,7 @@
 (defun mapcar! (function sequence &rest sequences)
   (apply #'map-into sequence function sequence sequences))
 
-(defun complete (string start end)
-  (let ((q (quoted string start)))
-    (when q
-      (unless (and (> q 1) (string= string "#p" :start1 (- q 2) :end1 q))
-        (setf *rl-attempted-completion-over* 1))
-      (return-from complete nil)))
-  (setf *rl-attempted-completion-over* 1)
+(defun complete-symbol (string start end)
   (multiple-value-bind (symbol-start internal package)
                        (parse-symbol string :start start :end end)
     (let ((functional (or (and (> start 0)
@@ -376,7 +371,7 @@
                                                   (- end symbol-start))))
                (symbol-name-cmp (symbol) (name-cmp (symbol-name symbol))))
         (unless package ; bad package name
-          (return-from complete nil))
+          (return-from complete-symbol nil))
         (sort
           (if (eq package 'keyword)
             (mapcar! (lambda (symbol) (symbol-name* symbol ":"))
@@ -404,6 +399,24 @@
                          (find-packages #'name-cmp)))))
           #'string-lessp)))))
 
+(defun rl-complete (string start end)
+  (when (= *rl-completion-quote-character* (char-code #\'))
+    (setf *rl-completion-suppress-quote* 1))
+  (let ((q (quoted string start)))
+    (when q
+      (unless (and (> q 1) (string= string "#p" :start1 (- q 2) :end1 q))
+        (setf *rl-attempted-completion-over* 1))
+      (return-from rl-complete nil)))
+  (setf *rl-attempted-completion-over* 1)
+  (let ((result (complete-symbol string start end)))
+    (when (and result
+               (not (cdr result))
+               (char= (char (car result) (1- (length (car result)))) #\:))
+      (setf *rl-completion-suppress-append* 1))
+    result))
+
+(defvar *complete* #'rl-complete)
+
 (defun string-start-intersection (&rest strings)
   (if (atom strings)
     strings
@@ -414,24 +427,17 @@
                            (or (string-lessp (car strings) s)
                                (length s)))))))
 
-(cffi:defcallback rl-complete :pointer 
+(cffi:defcallback rl-attempted-completion :pointer
                   ((word :string) (start :int) (end :int))
-  (declare (ignorable word))
-  (when (= *rl-completion-quote-character* (char-code #\'))
-    (setf *rl-completion-suppress-quote* 1))
-  (let ((result (complete *rl-line-buffer* start end)))
+  (declare (ignore word))
+  (let ((result (funcall *complete* *rl-line-buffer* start end)))
     (if result
-      (progn
-        (when (and (not (cdr result)) 
-                   (char= (char (car result) (1- (length (car result)))) #\:))
-          (setf *rl-completion-suppress-append* 1))
-        (cffi:foreign-alloc :string 
-                            :null-terminated-p t 
-                            :initial-contents
-                            (cons 
-                              (apply #'string-start-intersection
-                                     result)
-                              result)))
+      (cffi:foreign-alloc :string
+                          :null-terminated-p t
+                          :initial-contents (cons
+                                              (apply #'string-start-intersection
+                                                     result)
+                                              result))
       (cffi:null-pointer))))
 
 (cffi:defcallback rl-completion-display-matches-hook :void 
@@ -456,7 +462,7 @@
        (rl-display-match-list matches num-matches max-length)
        (rl-forced-update-display)))))
 
-(setf *rl-attempted-completion-function* (cffi:callback rl-complete)
+(setf *rl-attempted-completion-function* (cffi:callback rl-attempted-completion)
       *rl-basic-word-break-characters* #.(format nil " ~c~c\"#',@(|" 
                                                  #\tab #\newline)
       *rl-basic-quote-characters* "\""
