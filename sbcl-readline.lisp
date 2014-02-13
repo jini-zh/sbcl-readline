@@ -88,14 +88,25 @@
 
 (cffi:defcvar "rl_attempted_completion_function"   :pointer)
 (cffi:defcvar "rl_attempted_completion"            :int)
-(cffi:defcvar "rl_attempted_completion_over"       :int)
+
+(cffi:defcvar "rl_attempted_completion_over"       :int
+  "Non-zero means to suppress normal filename completion after the user-specified completion function has been called.")
+
 (cffi:defcvar "rl_basic_quote_characters"          :string)
-(cffi:defcvar "rl_basic_word_break_characters"     :string)
-(cffi:defcvar "rl_completion_display_matches_hook" :pointer)
+
+(cffi:defcvar "rl_basic_word_break_characters"     :string
+  "The basic list of characters that signal a break between words for the completer routine.  The initial contents of this variable is what breaks words in the shell, i.e. \" \\n\\t\\\"\\\\'`@$>.")
+
+(cffi:defcvar "rl_completion_display_matches_hook" :pointer
+  "If non-zero, then this is the address of a function to call when completing a word would normally display the list of possible matches.  This function is called instead of actually doing the display.  It takes three arguments: (char **matches, int num_matches, int max_length) where MATCHES is the array of strings that matched, NUM_MATCHES is the number of strings in that array, and MAX_LENGTH is the length of the longest string in that array.")
+
 (cffi:defcvar "rl_completion_query_items"          :int)
 (cffi:defcvar "rl_completion_quote_character"      :int)
 (cffi:defcvar "rl_completion_suppress_append"      :int)
-(cffi:defcvar "rl_completion_suppress_quote"       :int)
+
+(cffi:defcvar "rl_completion_suppress_quote"       :int
+  "If non-zero, the completion functions don't append any closing quote.  This is set to 0 by rl_complete_internal and may be changed by an application-specific completion function.")
+
 (cffi:defcvar "rl_event_hook"                      :pointer)
 (cffi:defcvar "rl_line_buffer"                     :string)
 (cffi:defcvar "rl_point"                           :int)
