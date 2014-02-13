@@ -97,6 +97,12 @@
 (cffi:defcvar "rl_basic_word_break_characters"     :string
   "The basic list of characters that signal a break between words for the completer routine.  The initial contents of this variable is what breaks words in the shell, i.e. \" \\n\\t\\\"\\\\'`@$>.")
 
+(cffi:defcvar "rl_completer_word_break_characters"  :string
+  "The list of characters that signal a break between words for rl_complete_internal.  The default list is the contents of rl_basic_word_break_characters.")
+
+(cffi:defcvar "rl_completion_append_character" :int
+  "Character appended to completed words when at the end of the line.  The default is a space.  Nothing is added if this is '\0'.")
+
 (cffi:defcvar "rl_completion_display_matches_hook" :pointer
   "If non-zero, then this is the address of a function to call when completing a word would normally display the list of possible matches.  This function is called instead of actually doing the display.  It takes three arguments: (char **matches, int num_matches, int max_length) where MATCHES is the array of strings that matched, NUM_MATCHES is the number of strings in that array, and MAX_LENGTH is the length of the longest string in that array.")
 
