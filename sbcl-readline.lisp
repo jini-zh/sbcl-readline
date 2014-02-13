@@ -369,19 +369,20 @@
     (let ((functional (or (and (> start 0)
                                (char= (char string (1- start)) #\())
                           (and (> start 1)
-                               (string= (subseq string (- start 2) start) 
-                                        "#'"))))
+                               (string= string "#'"
+                                        :start1 (- start 2)
+                                        :end1   start))))
+          (min-name-length (- end symbol-start))
           arg)
       (unless functional
         (multiple-value-setq (functional arg) 
           (find-parent-function string start)))
       (labels ((name-cmp (name)
-                 (let ((len (- end symbol-start)))
-                   (and (>= (length name) len)
-                        (string-equal string name
-                                      :start1 symbol-start
-                                      :end1   end
-                                      :end2   len))))
+                 (and (>= (length name) min-name-length)
+                      (string-equal string name
+                                    :start1 symbol-start
+                                    :end1   end
+                                    :end2   min-name-length)))
                (symbol-name-cmp (symbol) (name-cmp (symbol-name symbol))))
         (unless package ; bad package name
           (return-from complete-symbol nil))
