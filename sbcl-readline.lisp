@@ -507,14 +507,16 @@
             *rl-basic-quote-characters*
             "\""
             *rl-completion-display-matches-hook*
-            (cffi:callback rl-completion-display-matches-hook)))
+            (cffi:callback rl-completion-display-matches-hook))
+      (-rl-enable-paren-matching 1))
     (:default
       (setf *rl-basic-word-break-characters*
             #.(format nil " ~c~c\"\\'`@$>" #\tab #\newline)
             *rl-basic-quote-characters*
             "'\"`"
             *rl-completion-display-matches-hook*
-            (cffi:null-pointer))))
+            (cffi:null-pointer))
+      (-rl-enable-paren-matching 0)))
   (setf *rl-completer-word-break-characters* *rl-basic-word-break-characters*))
 
 (set-rl-options)
@@ -527,8 +529,6 @@
        (set-rl-options :default)
        ,@body)
      (set-rl-options)))
-
-(-rl-enable-paren-matching 1)
 
 (when (probe-file *history-file*)
   (read-history *history-file*))
