@@ -31,7 +31,8 @@
            set-keyboard-input-timeout
            get-event-hook
            set-event-hook
-           printf))
+           printf
+           with-default-rl))
 
 (in-package readline)
 
@@ -498,12 +499,34 @@
        (rl-display-match-list matches num-matches max-length)
        (rl-forced-update-display)))))
 
-(setf *rl-attempted-completion-function* (cffi:callback rl-attempted-completion)
-      *rl-basic-word-break-characters* #.(format nil " ~c~c\"#',@(|" 
-                                                 #\tab #\newline)
-      *rl-basic-quote-characters* "\""
-      *rl-completion-display-matches-hook* 
-      (cffi:callback rl-completion-display-matches-hook))
+(defun set-rl-options (&optional (set :sbcl))
+  (ecase set
+    (:sbcl
+      (setf *rl-basic-word-break-characters*
+            #.(format nil " ~c~c\"#',@(|" #\tab #\newline)
+            *rl-basic-quote-characters*
+            "\""
+            *rl-completion-display-matches-hook*
+            (cffi:callback rl-completion-display-matches-hook)))
+    (:default
+      (setf *rl-basic-word-break-characters*
+            #.(format nil " ~c~c\"\\'`@$>" #\tab #\newline)
+            *rl-basic-quote-characters*
+            "'\"`"
+            *rl-completion-display-matches-hook*
+            (cffi:null-pointer))))
+  (setf *rl-completer-word-break-characters* *rl-basic-word-break-characters*))
+
+(set-rl-options)
+(setf *rl-attempted-completion-function*
+      (cffi:callback rl-attempted-completion))
+
+(defmacro with-default-rl (&body body)
+  `(unwind-protect
+     (progn
+       (set-rl-options :default)
+       ,@body)
+     (set-rl-options)))
 
 (-rl-enable-paren-matching 1)
 
