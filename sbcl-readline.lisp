@@ -450,15 +450,32 @@
 (cffi:defcallback rl-attempted-completion :pointer
                   ((word :string) (start :int) (end :int))
   (declare (ignore word))
-  (let ((result (funcall *complete* *rl-line-buffer* start end)))
-    (if result
-      (cffi:foreign-alloc :string
-                          :null-terminated-p t
-                          :initial-contents (cons
-                                              (apply #'string-start-intersection
-                                                     result)
-                                              result))
-      (cffi:null-pointer))))
+  (unless *complete* (return-from rl-attempted-completion nil))
+  ((lambda (result)
+     (if result
+       (cffi:foreign-alloc
+         :string
+         :null-terminated-p t
+         :initial-contents (cons
+                             (apply #'string-start-intersection
+                                    result)
+                             result))
+       (cffi:null-pointer)))
+   #-sb-unicode (funcall *complete* *rl-line-buffer* start end)
+   #+sb-unicode
+   (let* ((octet-counter (babel-encodings:octet-counter
+                           (babel-encodings:lookup-mapping
+                             cffi::*foreign-string-mappings*
+                             cffi:*default-foreign-encoding*)))
+          (line *rl-line-buffer*)
+          (len  (length line)))
+     (flet ((count-characters (start max)
+              (if (zerop max)
+                start
+                (nth-value 1 (funcall octet-counter line start len max)))))
+       (let* ((cstart (count-characters 0 start))
+              (cend   (count-characters cstart (- end start))))
+         (funcall *complete* line cstart cend))))))
 
 (cffi:defcallback rl-completion-display-matches-hook :void 
                   ((matches :pointer) (num-matches :int) (max-length :int))
