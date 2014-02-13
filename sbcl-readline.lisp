@@ -479,17 +479,16 @@
 
 (cffi:defcallback rl-completion-display-matches-hook :void 
                   ((matches :pointer) (num-matches :int) (max-length :int))
-  (let ((f (and (> *rl-point* 0)
-                (whitespacep (char *rl-line-buffer* (1- *rl-point*)))
-                (find-parent-function *rl-line-buffer* *rl-point*
-                                      :as-symbol t))))
+  (let ((f (when (plusp *rl-point*)
+             (let ((line *rl-line-buffer*))
+               (when (whitespacep (char line (1- *rl-point*)))
+                 (find-parent-function line *rl-point* :as-symbol t))))))
     (cond
       (f
         (terpri)
         (describe f)
         (rl-forced-update-display))
-      ((or (< *rl-completion-query-items* 0)
-           (> *rl-completion-query-items* num-matches)
+      ((or (not (<= 0 *rl-completion-query-items* num-matches))
            (if (y-or-n-p "~%Display all ~d possibilities?" num-matches)
              t
              (progn
