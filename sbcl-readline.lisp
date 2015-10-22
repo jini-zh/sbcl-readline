@@ -234,7 +234,7 @@
               (setf allow-other-keys t
                     rest t)
               (loop-finish))
-        else if optional
+        else if (and optional (not rest) (not key))
          count t into opt-num
         else if key
          collect (intern (symbol-name
