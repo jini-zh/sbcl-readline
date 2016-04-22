@@ -188,33 +188,34 @@
     (function (funcall ps))))
 
 (defun readline-lisp (&key (ps1 "* ") (ps2 "> ") (eof-value nil eof-error-p))
-  "Prompts user for a command and returns the result as a Lisp form"
-  (loop with result
-        with pos = 0
-        for line = (readline (prompt ps1)) then (readline (prompt ps2))
-        for cmd = line then (concatenate 'string 
-                                         cmd 
-                                         #.(make-string 1 
-                                             :initial-element #\newline)
-                                         (or line ""))
-        unless line do
-          (if eof-error-p
-            (return eof-value)
-            (error 'end-of-file :stream *standard-input*))
-        do (handler-case
-             (loop with form
-                   with eof = '#:eof
-                   do (multiple-value-setq (form pos)
-                        (read-from-string cmd nil eof :start pos))
-                   until (eq form eof)
-                   do (push form result)
-                   finally
-                     (progn
-                       (unless (= (length cmd) 0)
-                         (add-history cmd))
-                       (return-from readline-lisp
-                                    (values-list (nreverse result)))))
-             (end-of-file ()))))
+  "Prompts the user for a command and returns the result as a Lisp form"
+  (let ((cmd "") result (pos 0))
+    (unwind-protect
+      (flet ((read1 (ps)
+               (let ((line (readline (prompt ps))))
+                 (unless line
+                   (if eof-error-p
+                     (return-from readline-lisp eof-value)
+                     (error 'end-of-file :stream *standard-output*)))
+                 line)))
+        (setf cmd (read1 ps1))
+        (loop
+          (handler-case
+            (loop
+              (let ((eof '#:eof))
+                (multiple-value-bind (form p) (read-from-string cmd nil eof
+                                                                :start pos)
+                  (when (eq form eof)
+                    (return-from readline-lisp (values-list (nreverse result))))
+                  (push form result)
+                  (setf pos p))))
+            (end-of-file ()))
+          (setf cmd
+                (concatenate 'string
+                             cmd
+                             #.(make-string 1 :initial-element #\newline)
+                             (read1 ps2)))))
+      (add-history cmd))))
 
 (defun parse-symbol (string &key (start 0) (end (length string)))
   (let* ((colon (position #\: string :start start :end end))
