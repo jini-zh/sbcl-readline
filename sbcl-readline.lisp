@@ -437,51 +437,64 @@
 (defvar *complete* #'rl-complete)
 
 (defun string-start-intersection (&rest strings)
-  (if (atom strings)
-    strings
+  (if (cdr strings)
     (subseq (car strings)
             0 
             (reduce #'min strings
                     :key (lambda (s) 
                            (or (string-lessp (car strings) s)
-                               (length s)))))))
+                               (length s)))))
+    (car strings)))
+
+#-sb-unicode
+(progn
+  (declaim (inline int->string-position))
+  (defun int->string-position (string int &optional (start 0))
+    (declare (ignore string))
+    (+ start int)))
+
+#+sb-unicode
+(defun int->string-position (string int &optional (start 0))
+  (flet ((char-byte-size (char)
+           (let ((code (char-code char)))
+             (cond
+                ; max Unicode code point is #x10ffff
+               ((> code #xffff) 3)
+               ((> code #xff)   2)
+               (t               1)))))
+    (loop
+      with i = 0
+      for j from start below (length string)
+      until (>= i int)
+      do (incf i (char-byte-size (char string j)))
+      finally (return j))))
 
 (cffi:defcallback rl-attempted-completion :pointer
-                  ((word :string) (start :int) (end :int))
+                  ((word :string) (c-start :int) (c-end :int))
   (declare (ignore word))
-  (unless *complete* (return-from rl-attempted-completion nil))
-  ((lambda (result)
-     (if result
-       (cffi:foreign-alloc
-         :string
-         :null-terminated-p t
-         :initial-contents (cons
-                             (apply #'string-start-intersection
-                                    result)
-                             result))
-       (cffi:null-pointer)))
-   #-sb-unicode (funcall *complete* *rl-line-buffer* start end)
-   #+sb-unicode
-   (let* ((octet-counter (babel-encodings:octet-counter
-                           (babel-encodings:lookup-mapping
-                             cffi::*foreign-string-mappings*
-                             cffi:*default-foreign-encoding*)))
-          (line *rl-line-buffer*)
-          (len  (length line)))
-     (flet ((count-characters (start max)
-              (if (zerop max)
-                start
-                (nth-value 1 (funcall octet-counter line start len max)))))
-       (let* ((cstart (count-characters 0 start))
-              (cend   (count-characters cstart (- end start))))
-         (funcall *complete* line cstart cend))))))
+  (if *complete*
+    (let ((result (let* ((start (int->string-position *rl-line-buffer*
+                                                      c-start))
+                         (end   (int->string-position *rl-line-buffer*
+                                                      (- c-end c-start)
+                                                      start)))
+                    (funcall *complete* *rl-line-buffer* start end))))
+      (if result
+        (cffi:foreign-alloc
+          :string
+          :null-terminated-p t
+          :initial-contents (cons (apply #'string-start-intersection result)
+                                  result))
+        (cffi:null-pointer)))
+    (cffi:null-pointer)))
 
-(cffi:defcallback rl-completion-display-matches-hook :void 
+(cffi:defcallback rl-completion-display-matches-hook :void
                   ((matches :pointer) (num-matches :int) (max-length :int))
   (let ((f (when (plusp *rl-point*)
-             (let ((line *rl-line-buffer*))
-               (when (whitespacep (char line (1- *rl-point*)))
-                 (find-parent-function line *rl-point* :as-symbol t))))))
+             (let* ((line *rl-line-buffer*)
+                    (point (int->string-position line *rl-point*)))
+               (when (whitespacep (char line (1- point)))
+                 (find-parent-function line point :as-symbol t))))))
     (cond
       (f
         (terpri)
