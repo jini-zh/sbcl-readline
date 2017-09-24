@@ -1,5 +1,5 @@
 ;;; SBCL interface to GNU Readline
-;;; (c) 2009--2011 by Evgeniy Zhemchugov <jini.zh@gmail.com>
+;;; (c) 2009--2017 by Evgenii Zhemchugov <jini.zh@gmail.com>
 ;;;
 ;;; This program is free software: you can redistribute it and/or modify
 ;;; it under the terms of the GNU General Public License as published by

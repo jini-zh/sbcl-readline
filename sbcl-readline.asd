@@ -5,6 +5,6 @@
   :name "sbcl-readline"
   :description "GNU Readline support for SBCL"
   :version "1.0.1"
-  :author "Evgeniy Zhemchugov"
+  :author "Evgenii Zhemchugov"
   :depends-on (cffi)
   :components ((:file "sbcl-readline")))
