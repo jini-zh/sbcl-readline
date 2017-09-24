@@ -36,9 +36,6 @@
 
 (in-package readline)
 
-(require 'asdf)
-(require 'cffi)
-
 #| how to implement callback through sbcl native routines?
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (handler-case (load-shared-object #p"libncursesw.so")
