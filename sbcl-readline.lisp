@@ -241,8 +241,9 @@
                              #.(make-string 1 :initial-element #\newline)
                              (read1 ps2)))))
       (unless
-          (and *ignore-duplicates*
-               (equal cmd *previous-line*))
+          (or (zerop (length cmd))
+              (and *ignore-duplicates*
+                   (equal cmd *previous-line*)))
         (setf *previous-line* cmd)
         (add-history cmd)))))
 
