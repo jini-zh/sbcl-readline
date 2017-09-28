@@ -7,3 +7,13 @@ sbcl-readline 1.0.2:
 	Provide proper autocompletion for keyword arguments in case of a function with both &rest and &key arguments.
 	Handle SBCL's &more keyword properly.
 	Do not miss documentation strings when help is printed on the TAB key being hit twice.
+
+sbcl-readline 1.0.3:
+
+	Separate completion logic from GNU Readline specific things. This
+	change makes it possible to use sbcl-readline for something else but
+	REPL. However, it hasn't been tested much.
+
+	Recognize #P as path macro character combination along with #p.
+
+	Provide Unicode support.
