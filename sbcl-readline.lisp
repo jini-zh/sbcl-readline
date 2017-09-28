@@ -55,9 +55,15 @@
 |#
 
 (cffi:define-foreign-library ncurses 
+  (:darwin (:or (:default "/usr/local/opt/ncurses/lib/libncursesw") ; homebrew
+                (:default "/opt/local/lib/libncursesw") ; macports
+                (:default "libncursesw")))
                              (:windows "pdcurses.dll")
                              (t (:or "libncursesw.so.6" "libncursesw.so.5")))
 (cffi:define-foreign-library readline 
+  (:darwin (:or (:default "/usr/local/opt/readline/lib/libreadline") ; homebrew
+                (:default "/opt/local/lib/libreadline") ; macports
+                (:default "libreadline")))
                              (:windows (:or "readline.dll" "readline5.dll"))
                              (t (:or "libreadline.so.6")))
 
