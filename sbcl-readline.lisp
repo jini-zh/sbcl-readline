@@ -24,6 +24,9 @@
            *ps2*
            *debug-ps1*
            *debug-ps2*
+           *eof-action*
+           immediate-exit
+           confirm-exit
            stifle-history
            unstifle-history
            readline-lisp
@@ -184,6 +187,18 @@
   "Either a string or a function that returns a string to be used when prompting user for the rest of inomplete command in debug mode. The function has to take no arguments")
 
 (defvar *event-hook* nil)
+
+(defun immediate-exit ()
+  "This or #'sb-ext:exit can be used to exit immediately on ctrl-D."
+  (sb-thread:abort-thread :allow-exit t))
+
+(defun confirm-exit ()
+  "Confirm exit with y/n before actually exiting (to be able to recover from accidental Ctrl-D)"
+  (if (y-or-n-p "Really quit?")
+      (sb-thread:abort-thread :allow-exit t)))
+
+(defvar *eof-action* #'immediate-exit
+  "What to do when ctrl-D is pressed. Default is to exit immediately, but for example #'confirm-exit can be used to confirm with y/n by adding (setf readline:*eof-action* #'readline:confirm-exit) in .sbclrc after sbcl-readline is loaded")
 
 (defun prompt (ps)
   (etypecase ps
@@ -583,7 +598,7 @@
           (let (buffer)
             (lambda (input output)
               (describe-readline-reader 
-                buffer input output *ps1* *ps2* (sb-ext:quit))))
+                buffer input output *ps1* *ps2* (funcall *eof-action*))))
           (symbol-function 'sb-debug::debug-prompt)
           (lambda (stream)
             (sb-thread::get-foreground)
