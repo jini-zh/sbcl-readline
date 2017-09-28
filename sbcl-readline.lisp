@@ -20,6 +20,7 @@
   (:export *complete*
            *history-file*
            *history-size*
+           *ignore-duplicates*
            *ps1*
            *ps2*
            *debug-ps1*
@@ -169,6 +170,12 @@
 (defvar *history-size* 200
   "Number of commands to keep in history")
 
+(defvar *ignore-duplicates* t
+  "If true, don't add line to history if it's the same as previous line")
+
+(defvar *previous-line* nil
+  "Keeps the previous line, to compare with the current for duplicate")
+
 (defvar *ps1* #'default-prompt
   "Either a string or a function that returns a string to be used when prompting user for the next command. The function has to take no arguments")
 
@@ -233,7 +240,11 @@
                              cmd
                              #.(make-string 1 :initial-element #\newline)
                              (read1 ps2)))))
-      (add-history cmd))))
+      (unless
+          (and *ignore-duplicates*
+               (equal cmd *previous-line*))
+        (setf *previous-line* cmd)
+        (add-history cmd)))))
 
 (defun parse-symbol (string &key (start 0) (end (length string)))
   (let* ((colon (position #\: string :start start :end end))
