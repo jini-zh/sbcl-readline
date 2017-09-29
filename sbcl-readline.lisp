@@ -56,7 +56,7 @@
 
 (cffi:define-foreign-library ncurses 
                              (:windows "pdcurses.dll")
-                             (t "libncursesw.so.5"))
+                             (t (:or "libncursesw.so.6" "libncursesw.so.5")))
 (cffi:define-foreign-library readline 
                              (:windows (:or "readline.dll" "readline5.dll"))
                              (t (:or "libreadline.so.6")))
