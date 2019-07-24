@@ -69,7 +69,7 @@
                 (:default "/opt/local/lib/libreadline") ; macports
                 (:default "libreadline")))
                              (:windows (:or "readline.dll" "readline5.dll"))
-                             (t (:or "libreadline.so.7" "libreadline.so.6")))
+                             (t (:or "libreadline.so.8" "libreadline.so.7" "libreadline.so.6")))
 
 (cffi:use-foreign-library ncurses)
 (cffi:use-foreign-library readline)
